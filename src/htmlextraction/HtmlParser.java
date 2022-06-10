@@ -3,19 +3,34 @@ package htmlextraction;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * This class can parse, filter and return text from html content.
+ */
 public class HtmlParser {
     private String htmlContent;
     private List<String> groupedContent;
 
+    /**
+     * Constructor of the HtmlParser class.
+     * Sets the content that can be filtered when using the {@link HtmlParser#getTextFromHtml()} function.
+     * @param content HTML content that will be filtered.
+     */
     HtmlParser(String content) {
         this.htmlContent = content;
     }
 
+    /**
+     * Sets the html content which can be filtered using the {@link HtmlParser#getTextFromHtml()} function.
+     * @param htmlContent HTML text
+     */
     public void setHtmlContent(String htmlContent) {
         this.htmlContent = htmlContent;
     }
 
-
+    /**
+     * Returns a filtered Text as String given an unfiltered html-style string.
+     * @return Extracted text as String.
+     */
     public String getTextFromHtml() {
 
         groupContent();
@@ -23,28 +38,27 @@ public class HtmlParser {
         return "";
     }
 
-
-    private String getTagAhead(int p){
-        String tag = "";
-
-        if(htmlContent.regionMatches(p, "<!--", 0, "<!--".length())) {
-            return "<!--";
-        }
-        else if (htmlContent.regionMatches(p, "<script>", 0, "<script>".length())) {
-            return "<script>";
-        }
-        else if (htmlContent.regionMatches(p, "</script>", 0, "</script>".length())) {
-            return "</script>";
-        }
-
-        return tag;
+    /**
+     * Checks if a given string is at the place of the given position in the {@link HtmlParser#htmlContent} string.
+     * @param position Position to start the comparison from.
+     * @param tag The tag to compare.
+     * @return Result of whether the tag is ahead or not.
+     */
+    private boolean isTagAhead(int position, String tag) {
+        return htmlContent.regionMatches(position, tag, 0, tag.length());
     }
 
+    /**
+     * Returns the first index of a given character in the htmlContent String from a specific index.
+     * @param c The character which will be searched for.
+     * @param from The index from which to search from.
+     * @return The next index at which the character has been found.
+     */
     private int getFirstIndex(char c, int from) {
-        int idx = -1;
+        int idx = from;
 
         for(int i = from + 1; i < htmlContent.length(); i++) {
-            if(htmlContent.charAt(i) == '"' || htmlContent.charAt(i) == '\'') {
+            if(htmlContent.charAt(i) == c) {
                 idx = i;
                 break;
             }
@@ -53,28 +67,39 @@ public class HtmlParser {
         return idx;
     }
 
+    /**
+     * Groups the tags and the content in between tags from {@link HtmlParser#htmlContent} in a list.
+     * The groups will be stored in {@link HtmlParser#groupedContent} and will be later used for easy filtering.
+     */
     private void groupContent() {
-
         this.groupedContent = new ArrayList<>();
         StringBuilder currentGroup = new StringBuilder();
 
+        // Useful to determine if the current char is inside a comment. Will be true if <!-- structure is detected
         boolean inComment = false;
 
-        // TODO: Respect script tags as well
+        // We will iterate through each character of the html content
+        // i is the cursor, at which we will read the current character c
         for(int i = 0; i < htmlContent.length(); i++) {
             char c = htmlContent.charAt(i);
-            boolean inScriptTag = false;
+            boolean betweenScriptTags = false;
             boolean inTag = false;
+            boolean betweenStyleTags = false;
 
-
-            // Check if last group was script tag opening
             if(!groupedContent.isEmpty()) {
+                // Check if last group was script tag opening and remember
                 if(groupedContent.get(groupedContent.size() - 1).contains("<script")) {
-                    inScriptTag = true;
+                    betweenScriptTags = true;
                 }
+
+                // Check if last group was style tag opening and remember
+                if(groupedContent.get(groupedContent.size() - 1).contains("<style")) {
+                    betweenStyleTags = true;
+                }
+
             }
 
-            // Check if current group is a tag
+            // Check if current group is a tag and remember
             if(!currentGroup.isEmpty()) {
                 if(currentGroup.charAt(0) == '<') {
                     inTag = true;
@@ -82,16 +107,21 @@ public class HtmlParser {
             }
 
 
+            // Now we will try to detect special things inside the content
 
 
-            if (!inComment && getTagAhead(i).equals("<script>")) {
-                currentGroup.append("<script>");
-                i = i + 7;
-
+            // Detect a style ending tag
+            if(betweenStyleTags && !inComment && isTagAhead(i, "</style>")){
                 groupedContent.add(currentGroup.toString());
                 currentGroup = new StringBuilder();
 
-            } else if(inScriptTag && !inComment && getTagAhead(i).equals("</script>")) {
+                currentGroup.append("</style>");
+                groupedContent.add(currentGroup.toString());
+                currentGroup = new StringBuilder();
+
+                i = i + 7;
+
+            } else if(betweenScriptTags && !inComment && isTagAhead(i, "</script>")) {
                 // Add everything before </script> tag as a group
                 groupedContent.add(currentGroup.toString());
                 currentGroup = new StringBuilder();
@@ -106,25 +136,27 @@ public class HtmlParser {
                 i = i + 8;
 
 
-            } else if (c == '<' && !inScriptTag) {
+            } else if (c == '<' && !betweenScriptTags && !betweenStyleTags) {
                 // Do not add empty groups to list or incomplete comments.
                 if(!currentGroup.isEmpty() && !inComment){
                     groupedContent.add(currentGroup.toString());
                     currentGroup = new StringBuilder();
                 }
 
-                // Check if there will be comment
-                if (!inComment && htmlContent.charAt(i+1) == '!' && htmlContent.charAt(i+2) == '-' && htmlContent.charAt(i+3) == '-') {
+                // Check if there will be a comment
+                if (!inComment && isTagAhead(i, "<!--")) {
                     // We will be in a comment, add whole comment tag
                     currentGroup.append("<!--");
 
                     i = i + 3;
                     inComment = true;
+
                 } else {
+                    // No comment was detected, so we will gather the rest of the opening tag
                     currentGroup.append(c);
                 }
 
-            } else if (!inScriptTag && inComment && c == '-' && htmlContent.charAt(i+1) == '-' && htmlContent.charAt(i+2) == '>') {
+            } else if (!betweenScriptTags && inComment && isTagAhead(i, "-->")) {
                 // Detected closing tag for comment
                 currentGroup.append("-->");
                 i = i + 2;
@@ -134,34 +166,38 @@ public class HtmlParser {
                 groupedContent.add(currentGroup.toString());
                 currentGroup = new StringBuilder();
 
-            } else if (!inScriptTag && !inComment && c == '>') {
-
+            } else if (!betweenScriptTags && !betweenStyleTags && !inComment && c == '>') {
+                // Detected tag ending
                 currentGroup.append(c);
 
-                // Only add group if we are not in comment, as '>' is insufficient for closing a tag ('-->' required!)
                 groupedContent.add(currentGroup.toString());
                 currentGroup = new StringBuilder();
 
             } else if (inTag && !inComment && c == '=' && (htmlContent.charAt(i+1) == '"' || htmlContent.charAt(i+1) == '\'')) {
-                // Find next ' or "
-                int idx = i;
+                // Found a property in the form of ="value" or ='value'.
 
+                // Find next ' or "
+                int idx;
+
+                // We append the first =" or ='
                 currentGroup.append("=");
                 currentGroup.append(htmlContent.charAt(i+1));
 
+                // We get the next occurrence of " or '
                 if(htmlContent.charAt(i+1) == '"') {
-                    //idx = htmlContent.indexOf('"', htmlContent.charAt(i+2));
-                    idx = getFirstIndex('1', i + 1);
+                    idx = getFirstIndex('"', i + 1);
                 } else {
-                    idx = getFirstIndex('1', i + 1);
-                    //idx = htmlContent.indexOf('\'', htmlContent.charAt(i+2));
+                    idx = getFirstIndex('\'', i + 1);
                 }
 
+                // We append the next " or '
                 currentGroup.append(htmlContent.charAt(idx));
 
+                // We skip the stuff in between and move the cursor to the index of the last " or '
                 i = idx;
 
             } else {
+                // Nothing special was detected, we will just add the character to the current group
                 currentGroup.append(c);
             }
         }
