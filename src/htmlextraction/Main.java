@@ -11,7 +11,7 @@ public class Main {
 
         String content = io.extractHtmlFromFile("golem.html");
 
-        //System.out.println(content);
+       // System.out.println(content);
 
         HtmlParser parser = new HtmlParser(content);
 
