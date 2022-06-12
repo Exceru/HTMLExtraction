@@ -1,10 +1,15 @@
 package htmlextraction;
 
-import java.util.ArrayList;
-import java.util.List;
 
+/**
+ * This class starts the whole process of extracting the html-code and changing it.
+ */
 public class Main {
 
+    /**
+     * This method extracts the html-code from a file and writes the updated into another file.
+     * @param args Parameter, which is transmtted when starting the program.
+     */
     public static void main(String[] args) {
 
         HtmlIO io = new HtmlIO();
@@ -15,6 +20,7 @@ public class Main {
 
         String s = parser.getTextFromHtml();
 
+        io.safeTextToFile(name.replace(".html",".txt"), s);
 
     }
 }
