@@ -1,14 +1,24 @@
 package htmlextraction;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * This class can parse, filter and return text from html content.
  */
 public class HtmlParser {
+    /**
+     * Stores the original html content as a string.
+     */
     private String htmlContent;
+    /**
+     * Stores html content as groups, separated by tags or the content between tags.
+     */
     private List<String> groupedContent;
+    /**
+     * Stores the filtered html content.
+     */
+    private String updatedHtmlContent;
 
     /**
      * Constructor of the HtmlParser class.
@@ -34,18 +44,21 @@ public class HtmlParser {
     public String getTextFromHtml() {
 
         groupContent();
+        filterGroupedContent();
+        convertContentTags();
 
-        return "";
+        return updatedHtmlContent;
     }
 
     /**
      * Checks if a given string is at the place of the given position in the {@link HtmlParser#htmlContent} string.
      * @param position Position to start the comparison from.
      * @param tag The tag to compare.
+     * @param source The source string, in which the comparison takes place.
      * @return Result of whether the tag is ahead or not.
      */
-    private boolean isTagAhead(int position, String tag) {
-        return htmlContent.regionMatches(position, tag, 0, tag.length());
+    private boolean isTagAhead(int position, String tag, String source) {
+        return source.regionMatches(position, tag, 0, tag.length());
     }
 
     /**
@@ -111,7 +124,7 @@ public class HtmlParser {
 
 
             // Detect a style ending tag
-            if(betweenStyleTags && !inComment && isTagAhead(i, "</style>")){
+            if(betweenStyleTags && !inComment && isTagAhead(i, "</style>", htmlContent)){
                 groupedContent.add(currentGroup.toString());
                 currentGroup = new StringBuilder();
 
@@ -121,7 +134,7 @@ public class HtmlParser {
 
                 i = i + 7;
 
-            } else if(betweenScriptTags && !inComment && isTagAhead(i, "</script>")) {
+            } else if(betweenScriptTags && !inComment && isTagAhead(i, "</script>", htmlContent)) {
                 // Add everything before </script> tag as a group
                 groupedContent.add(currentGroup.toString());
                 currentGroup = new StringBuilder();
@@ -144,7 +157,7 @@ public class HtmlParser {
                 }
 
                 // Check if there will be a comment
-                if (!inComment && isTagAhead(i, "<!--")) {
+                if (!inComment && isTagAhead(i, "<!--", htmlContent)) {
                     // We will be in a comment, add whole comment tag
                     currentGroup.append("<!--");
 
@@ -156,7 +169,7 @@ public class HtmlParser {
                     currentGroup.append(c);
                 }
 
-            } else if (!betweenScriptTags && inComment && isTagAhead(i, "-->")) {
+            } else if (!betweenScriptTags && inComment && isTagAhead(i, "-->", htmlContent)) {
                 // Detected closing tag for comment
                 currentGroup.append("-->");
                 i = i + 2;
@@ -202,21 +215,65 @@ public class HtmlParser {
             }
         }
 
-        groupedContent.forEach(System.out::println);
+        //groupedContent.forEach(System.out::println);
     }
 
 
-
+    /**
+     * Checks if a group (String) is special.
+     * @param group Group to analyse
+     * @return Result of whether the group is special or not
+     */
     private boolean isGroupSpecial(String group){
+
+        if(!(group.contains("''") || group.contains("\"\""))){
+            if(group.isEmpty() || group.isBlank()) {
+                return true;
+            }
+            if(group.charAt(0) == '<' && group.charAt(group.length() - 1) == '>') {
+                return true;
+            }
+        }
 
         return false;
     }
 
-    private void filterGroupedContent() {
+    /**
+     * This method filters the special tags and joins the updated list to a string.
+     */
+    private void filterGroupedContent(){
+        // filter group
+        groupedContent = groupedContent.stream().filter(entry -> !isGroupSpecial(entry)).collect(Collectors.toList());
 
+        // write filtered group in final String
+        StringBuilder stringBuilder = new StringBuilder();
+        for (String content : groupedContent) {
+            stringBuilder.append(content);
+        }
+        updatedHtmlContent = stringBuilder.toString();
     }
 
-    private void convertContentTags() {
+    /**
+     * This method converts the html-specifiers for certain letters oder special signs to the ascii-value.
+     */
+    private void convertContentTags(){
 
+        // create List with signs and List with asciiValues
+        List<String> specialSigns = Arrays.asList("&auml;","&Auml;","&ouml;","&Ouml;","&uuml;","&Uuml;",
+                "&szlig;","&lt;","&gt;","&amp;","&quot;","&nbsp;");
+        List<Integer> values = Arrays.asList(228,196,246,214,252,220,223,60,62,38,34,32);
+
+        // create Map with signs and asciiValues
+        Map<String, Integer> specialSignsAndValue = new HashMap<>();
+        for (int i = 0; i < specialSigns.size(); i++) {
+            specialSignsAndValue.put(specialSigns.get(i), values.get(i));
+        }
+
+        // change all occurrences of signs in String with asciiValues
+        for (var entry : specialSignsAndValue.entrySet()) {
+            char asciiValue = (char) entry.getValue().intValue();
+            updatedHtmlContent = updatedHtmlContent.replace(entry.getKey(), String.valueOf(asciiValue));
+        }
     }
+
 }
